@@ -1,0 +1,2276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover"/>
+  <title>East Bay Inventory Tracker — Premium</title>
+
+  <!-- QR Scanner -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <!-- OCR (Manifest photo → text). If blocked, app still works via Paste/Manual. -->
+  <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <style>
+    :root{
+      /* Premium theme variables (customizable in Settings) */
+      --bg0:#05070f;
+      --bg1:#0b1224;
+      --card: rgba(255,255,255,0.06);
+      --card2: rgba(255,255,255,0.045);
+      --border: rgba(255,255,255,0.10);
+      --border2: rgba(255,255,255,0.14);
+      --txt:#eef2ff;
+      --muted:#97a6c6;
+
+      --accentA:#22c55e; /* Jets green default */
+      --accentB:#38bdf8; /* Sky */
+      --warn:#f59e0b;
+      --bad:#ef4444;
+
+      --radius:18px;
+      --shadow: 0 18px 45px rgba(0,0,0,0.45);
+      --glowA: 0 0 38px rgba(34,197,94,0.18);
+      --glowB: 0 0 38px rgba(56,189,248,0.16);
+
+      --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+
+    *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+    html,body{height:100%}
+    body{
+      margin:0; font-family:var(--font); color:var(--txt);
+      background:
+        radial-gradient(800px 500px at 10% 0%, rgba(34,197,94,0.12), transparent 60%),
+        radial-gradient(700px 450px at 90% 10%, rgba(56,189,248,0.11), transparent 62%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      overflow:hidden;
+    }
+
+    /* App Shell */
+    #app{height:100%; display:flex; flex-direction:column; max-width:1200px; margin:0 auto; position:relative;}
+
+    header{
+      position:sticky; top:0; z-index:50;
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      padding:14px 14px;
+      background: rgba(8,12,22,0.72);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    .brand{display:flex; gap:12px; align-items:center;}
+    .dot{width:10px;height:10px;border-radius:50%; background:#64748b; box-shadow:0 0 12px rgba(148,163,184,0.25);}
+    .dot.ok{background:var(--accentA); box-shadow: var(--glowA);}
+    .title{font-weight:950; text-transform:uppercase; letter-spacing:1.1px; font-size:12px;}
+    .sub{font-size:11px; color:var(--muted); margin-top:2px}
+    .hdrRight{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; align-items:center}
+
+    .pill{
+      border:1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+      color:var(--txt);
+      padding:10px 12px; border-radius:999px;
+      font-weight:900; font-size:11px; text-transform:uppercase; letter-spacing:0.6px;
+      cursor:pointer;
+      box-shadow: 0 10px 26px rgba(0,0,0,0.22);
+      display:flex; align-items:center; gap:8px;
+    }
+    .pill:active{transform:scale(0.985)}
+    .pill.primary{
+      border-color: rgba(34,197,94,0.35);
+      background: linear-gradient(180deg, rgba(34,197,94,0.22), rgba(34,197,94,0.10));
+      box-shadow: var(--glowA);
+      color:#d7ffe6;
+    }
+    .pill.blue{
+      border-color: rgba(56,189,248,0.32);
+      background: linear-gradient(180deg, rgba(56,189,248,0.18), rgba(56,189,248,0.08));
+      box-shadow: var(--glowB);
+      color:#d9f3ff;
+    }
+    .pill.bad{
+      border-color: rgba(239,68,68,0.35);
+      background: linear-gradient(180deg, rgba(239,68,68,0.16), rgba(239,68,68,0.08));
+      color:#ffd1d1;
+    }
+
+    main{flex:1; overflow:auto; padding:14px; padding-bottom:120px;}
+
+    .grid{display:grid; gap:14px;}
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045));
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow: var(--shadow);
+      padding:14px;
+      backdrop-filter: blur(14px);
+      position:relative;
+      overflow:hidden;
+    }
+    .card::before{
+      content:"";
+      position:absolute; inset:-2px;
+      background: radial-gradient(500px 240px at 20% 0%, rgba(34,197,94,0.10), transparent 60%),
+                  radial-gradient(460px 220px at 90% 10%, rgba(56,189,248,0.10), transparent 60%);
+      pointer-events:none;
+      opacity:0.8;
+    }
+    .card > *{position:relative}
+
+    .cardHead{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px;}
+    .cardTitle{font-size:12px; font-weight:950; text-transform:uppercase; letter-spacing:1px; color:var(--muted);}
+    .mini{font-size:11px; color:var(--muted); line-height:1.35}
+    .kbd{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:#e5e7ff;}
+
+    label{display:block; font-size:11px; font-weight:900; letter-spacing:0.6px; color:rgba(151,166,198,0.95); text-transform:uppercase; margin-bottom:6px;}
+    input, select, textarea{
+      width:100%;
+      border-radius:14px;
+      border:1px solid var(--border);
+      background: rgba(0,0,0,0.30);
+      color:var(--txt);
+      padding:12px 12px;
+      outline:none;
+      font-size:15px;
+      margin-bottom:12px;
+    }
+    input:focus, select:focus, textarea:focus{border-color: rgba(56,189,248,0.45); box-shadow: 0 0 0 4px rgba(56,189,248,0.10);}
+    textarea{resize:vertical}
+
+    .row2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+    .row3{display:grid; grid-template-columns:1.15fr .85fr .85fr; gap:12px;}
+
+    .btn{
+      width:100%;
+      border:none;
+      border-radius:999px;
+      padding:12px 14px;
+      font-weight:950;
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:0.7px;
+      cursor:pointer;
+      display:flex; align-items:center; justify-content:center; gap:8px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.30);
+    }
+    .btn:active{transform:scale(0.985)}
+    .btnA{background: linear-gradient(180deg, rgba(34,197,94,0.95), rgba(34,197,94,0.75)); color:#00110b;}
+    .btnB{background: linear-gradient(180deg, rgba(56,189,248,0.95), rgba(56,189,248,0.70)); color:#001019;}
+    .btnG{background: rgba(255,255,255,0.08); border:1px solid var(--border2); color:var(--txt);}
+    .btnR{background: rgba(239,68,68,0.16); border:1px solid rgba(239,68,68,0.32); color:#ffd1d1;}
+
+    /* Tabs */
+    .tabs{
+      position:absolute; left:0; right:0; bottom:0; z-index:60;
+      padding:12px;
+      background: rgba(8,12,22,0.78);
+      border-top: 1px solid var(--border);
+      backdrop-filter: blur(16px);
+      display:flex; justify-content:space-around; gap:10px;
+    }
+    .tab{
+      flex:1;
+      border:none;
+      background: transparent;
+      color: #7c8db3;
+      font-weight:950;
+      font-size:10px;
+      text-transform:uppercase;
+      letter-spacing:0.9px;
+      padding:10px 10px;
+      border-radius:14px;
+      cursor:pointer;
+      display:flex; flex-direction:column; align-items:center; gap:6px;
+    }
+    .tab.active{
+      color: #dff6ff;
+      border: 1px solid rgba(56,189,248,0.22);
+      background: rgba(56,189,248,0.10);
+      box-shadow: var(--glowB);
+    }
+    .tab .ico{font-size:20px; line-height:1}
+
+    /* Inventory list items */
+    .bar{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    .bar input{margin:0; flex:1; min-width:220px}
+    .toggle{
+      padding:10px 12px; border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: #aab6d1;
+      font-weight:950; font-size:11px; text-transform:uppercase;
+      cursor:pointer; user-select:none;
+    }
+    .toggle.on{
+      border-color: rgba(34,197,94,0.35);
+      background: rgba(34,197,94,0.18);
+      color:#d7ffe6;
+      box-shadow: var(--glowA);
+    }
+
+    .item{
+      border:1px solid var(--border);
+      border-radius:18px;
+      background: rgba(255,255,255,0.035);
+      padding:12px;
+      margin-top:10px;
+      overflow:hidden;
+      position:relative;
+    }
+    .item::after{
+      content:"";
+      position:absolute; inset:0;
+      background: radial-gradient(280px 180px at 18% 0%, rgba(34,197,94,0.08), transparent 60%),
+                  radial-gradient(260px 160px at 92% 18%, rgba(56,189,248,0.08), transparent 60%);
+      opacity:0.85;
+      pointer-events:none;
+    }
+    .item > *{position:relative}
+
+    .item.low{border-left:6px solid var(--bad); background: linear-gradient(90deg, rgba(239,68,68,0.12), rgba(255,255,255,0.035));}
+    .item.warn{border-left:6px solid var(--warn); background: linear-gradient(90deg, rgba(245,158,11,0.10), rgba(255,255,255,0.035));}
+    .item.ok{border-left:6px solid var(--accentA); background: linear-gradient(90deg, rgba(34,197,94,0.10), rgba(255,255,255,0.035));}
+
+    .itemTop{display:flex; justify-content:space-between; gap:12px; align-items:flex-start; cursor:pointer}
+    .name{font-weight:950; font-size:15px; line-height:1.1}
+    .sku{font-size:11px; color:var(--muted); margin-top:5px}
+    .chip{
+      white-space:nowrap;
+      font-size:10px; font-weight:950; text-transform:uppercase; letter-spacing:0.8px;
+      padding:6px 10px; border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(0,0,0,0.20);
+      color:#cbd5ff;
+    }
+    .chip.low{border-color: rgba(239,68,68,0.35); color:#ffd1d1; background: rgba(239,68,68,0.10);}
+    .chip.warn{border-color: rgba(245,158,11,0.35); color:#ffe4b0; background: rgba(245,158,11,0.10);}
+    .chip.ok{border-color: rgba(34,197,94,0.35); color:#d7ffe6; background: rgba(34,197,94,0.10);}
+
+    .meta{display:flex; flex-wrap:wrap; gap:10px; margin-top:10px}
+    .meta span{font-size:12px; color:#aab6d1}
+    .meta b{color:#e9edff}
+
+    .actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+    .aBtn{
+      padding:9px 10px; border-radius:999px;
+      border:1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color:#e9edff;
+      font-weight:950; font-size:11px; text-transform:uppercase;
+      cursor:pointer;
+    }
+    .aBtn:active{transform:scale(0.985)}
+    .aBtn.blue{border-color: rgba(56,189,248,0.30); background: rgba(56,189,248,0.12); color:#d9f3ff}
+    .aBtn.green{border-color: rgba(34,197,94,0.30); background: rgba(34,197,94,0.12); color:#d7ffe6}
+    .aBtn.red{border-color: rgba(239,68,68,0.30); background: rgba(239,68,68,0.12); color:#ffd1d1}
+
+    .details{display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--border);}
+    .item.open .details{display:block}
+
+    .txRow{
+      display:flex; justify-content:space-between; gap:10px;
+      padding:7px 0; border-bottom:1px dashed rgba(255,255,255,0.08);
+      font-size:11px; color:#aab6d1;
+    }
+    .txRow b{color:#e9edff}
+    .noteLine{font-size:11px; color:#95a3bf; margin:-4px 0 8px 0}
+
+    /* Scanner overlay */
+    #scanOverlay{
+      position:fixed; inset:0; z-index:2000;
+      background:#000;
+      display:none; flex-direction:column;
+    }
+    .scanTop{
+      display:flex; justify-content:space-between; align-items:center; gap:10px;
+      padding:14px;
+      background: rgba(0,0,0,0.55);
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+    }
+    #reader{flex:1}
+
+    /* Auth overlay */
+    #auth{
+      position:fixed; inset:0; z-index:2200;
+      display:flex; align-items:center; justify-content:center;
+      padding:18px;
+      background:
+        radial-gradient(900px 560px at 12% 0%, rgba(34,197,94,0.14), transparent 60%),
+        radial-gradient(800px 520px at 90% 10%, rgba(56,189,248,0.12), transparent 62%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+    }
+    .authBox{
+      width:100%; max-width:380px;
+      border-radius:22px;
+      border:1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+      padding:16px;
+    }
+    .authTitle{font-weight:1000; text-transform:uppercase; letter-spacing:1.4px; font-size:14px}
+    .authSub{font-size:12px; color:var(--muted); margin:6px 0 14px}
+    .msg{font-size:12px; color:#ffd1d1; min-height:18px}
+
+    /* Manifest */
+    .banner{
+      border:1px solid rgba(56,189,248,0.22);
+      background: rgba(56,189,248,0.10);
+      color:#d9f3ff;
+      padding:10px 12px;
+      border-radius:16px;
+      font-size:12px;
+      font-weight:950;
+      display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+    }
+    .tag{
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,0.14);
+      background: rgba(0,0,0,0.18);
+      font-size:11px; font-weight:950; color:#e9edff;
+    }
+    .tag.green{border-color: rgba(34,197,94,0.30); background: rgba(34,197,94,0.10); color:#d7ffe6}
+    .tag.red{border-color: rgba(239,68,68,0.30); background: rgba(239,68,68,0.10); color:#ffd1d1}
+    .tag.warn{border-color: rgba(245,158,11,0.30); background: rgba(245,158,11,0.10); color:#ffe4b0}
+
+    .mItems{margin-top:10px}
+    .mItem{
+      border:1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.03);
+      border-radius:16px;
+      padding:12px;
+      margin-top:10px;
+    }
+    .mItemTop{display:flex; justify-content:space-between; align-items:flex-start; gap:10px}
+    .mItemName{font-weight:1000; font-size:14px}
+    .mItemSku{font-size:11px; color:var(--muted); margin-top:4px}
+    .mGrid{display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px}
+    .mGrid3{display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-top:10px}
+    .smallIn{
+      padding:10px 10px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,0.12);
+      background: rgba(0,0,0,0.28);
+      color:var(--txt);
+      outline:none;
+      font-size:14px;
+      width:100%;
+    }
+
+    .sigWrap{
+      background:#fff;
+      height:150px;
+      border-radius:16px;
+      overflow:hidden;
+      border:1px solid rgba(0,0,0,0.18);
+    }
+    canvas{touch-action:none}
+
+    .thumbRow{display:flex; gap:10px; flex-wrap:wrap; margin-top:10px}
+    .thumb{width:140px; height:100px; border-radius:14px; object-fit:cover; border:1px solid rgba(255,255,255,0.14); cursor:pointer}
+
+    /* Print area */
+    @media print{
+      body{background:#fff; color:#000; overflow:visible}
+      #app, #auth, #scanOverlay, #toast{display:none !important}
+      #printArea{display:block !important; padding:24px; font-family: ui-monospace, Menlo, Consolas, monospace;}
+      .box{border:1px solid #000; padding:10px; margin:10px 0}
+      img{max-width:520px}
+    }
+
+    /* Toast */
+    #toast{
+      position:fixed; top:-70px; left:50%; transform:translateX(-50%);
+      background: linear-gradient(180deg, rgba(56,189,248,0.95), rgba(56,189,248,0.70));
+      color:#001019;
+      padding:12px 16px;
+      border-radius:999px;
+      font-weight:1000;
+      box-shadow: 0 16px 36px rgba(0,0,0,0.40);
+      z-index:3000;
+      transition: top .22s ease;
+      display:flex; gap:10px; align-items:center;
+      font-size:12px;
+      max-width:92vw;
+    }
+    #toast.show{top:18px}
+    .toastSub{font-weight:900; opacity:0.8}
+  </style>
+</head>
+
+<body>
+  <div id="toast"><span>🔔</span><div><div id="toastMsg">Saved</div><div class="toastSub" id="toastSub"></div></div></div>
+  <div id="printArea" style="display:none;"></div>
+
+  <!-- AUTH -->
+  <div id="auth">
+    <div class="authBox">
+      <div class="authTitle">East Bay Inventory Tracker</div>
+      <div class="authSub">Premium parallel version • simple accountability login</div>
+
+      <label>Password</label>
+      <input id="pw" type="password" placeholder="Enter your password (e.g. 1234)"/>
+
+      <button class="btn btnB" onclick="EB.login()">🔐 Log In</button>
+
+      <div class="mini" style="margin-top:10px">
+        First time setup: log in with <span class="kbd">ADMIN</span> password <span class="kbd" id="adminPwHint">1344</span> and add users in Settings.
+      </div>
+
+      <div class="msg" id="authMsg"></div>
+    </div>
+  </div>
+
+  <!-- APP -->
+  <div id="app" style="display:none;">
+    <header>
+      <div class="brand">
+        <div class="dot" id="dot"></div>
+        <div>
+          <div class="title">East Bay Inventory Tracker</div>
+          <div class="sub">
+            User: <span class="kbd" id="who">—</span> • Device: <span class="kbd" id="devId">—</span>
+          </div>
+        </div>
+      </div>
+      <div class="hdrRight">
+        <button class="pill blue" onclick="EB.openScan('inv')">📷 Scan SKU</button>
+        <button class="pill blue" onclick="EB.openScan('job')">📷 Scan Job</button>
+        <button class="pill primary" onclick="EB.eodEmail()">✉️ EOD Email</button>
+        <button class="pill" onclick="EB.nav('settings')">⚙️ Settings</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- INVENTORY VIEW -->
+      <div id="view-inv" class="grid">
+        <div class="card">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Inventory — Quick Add / Edit</div>
+              <div class="mini">Scan SKU QR → fills SKU. Every adjustment logs <span class="kbd">who</span> + note.</div>
+            </div>
+            <button class="pill" onclick="EB.inv.clearForm()">🧽 Clear</button>
+          </div>
+
+          <div class="row3">
+            <div>
+              <label>SKU (QR Value)</label>
+              <input id="iSku" placeholder="e.g. BOLT-001"/>
+            </div>
+            <div>
+              <label>On Hand</label>
+              <input id="iOn" type="number" step="1" placeholder="0"/>
+            </div>
+            <div>
+              <label>Unit</label>
+              <input id="iUnit" placeholder="ea / box / ft"/>
+            </div>
+          </div>
+
+          <label>Item Name</label>
+          <input id="iName" placeholder="e.g. 1/4-20 Bolts"/>
+
+          <div class="row2">
+            <div><label>Minimum</label><input id="iMin" type="number" step="1" placeholder="0"/></div>
+            <div><label>Maximum</label><input id="iMax" type="number" step="1" placeholder="0"/></div>
+          </div>
+
+          <div class="row2">
+            <div><label>Location</label><input id="iLoc" placeholder="Shelf A / Cage / Truck"/></div>
+            <div><label>Category</label><input id="iCat" placeholder="Fasteners / Hardware"/></div>
+          </div>
+
+          <label>Notes</label>
+          <textarea id="iNotes" rows="2" placeholder="Optional..."></textarea>
+
+          <div class="row2">
+            <button class="btn btnA" onclick="EB.inv.save()">✅ Save Item</button>
+            <button class="btn btnG" onclick="EB.inv.quickAdjustFromForm()">➕➖ Adjust (with note)</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Inventory List</div>
+              <div class="mini">Red = below min • Yellow = near min • Green = ok. Tap item to see transactions.</div>
+            </div>
+            <div class="bar">
+              <button class="pill" onclick="EB.inv.exportCSV()">⬇️ Export CSV</button>
+              <button class="pill" onclick="EB.inv.triggerImport()">⬆️ Import CSV</button>
+            </div>
+          </div>
+
+          <div class="bar">
+            <input id="invSearch" placeholder="Search name / SKU / location / category..." oninput="EB.inv.render()"/>
+            <div id="lowOnly" class="toggle" onclick="EB.inv.toggleLowOnly()">Low Only</div>
+          </div>
+
+          <div class="mini" id="invCounts"></div>
+          <div id="invList"></div>
+        </div>
+      </div>
+
+      <!-- MANIFEST VIEW -->
+      <div id="view-man" class="grid" style="display:none;">
+        <div class="card">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Manifest — Photo → OCR → Electronic Manifest</div>
+              <div class="mini">
+                Best workflow: take a clear photo of Vicon manifest → OCR → confirm fields → adjust counts w/ reason → finalize (deducts inventory).
+              </div>
+            </div>
+            <div class="bar">
+              <button class="pill" onclick="EB.man.new()">➕ New Manifest</button>
+              <button class="pill bad" onclick="EB.man.clear()">🧨 Clear</button>
+            </div>
+          </div>
+
+          <div class="banner" id="manBanner">
+            <span class="tag">Manifest: <span class="kbd" id="mId">—</span></span>
+            <span class="tag green">Status: <span class="kbd" id="mStatus">Draft</span></span>
+            <span class="tag">Created by: <span class="kbd" id="mBy">—</span></span>
+          </div>
+
+          <div class="row2" style="margin-top:12px;">
+            <button class="btn btnB" onclick="EB.man.photoOCR()">📸 Photo OCR (Vicon manifest)</button>
+            <button class="btn btnG" onclick="EB.man.pasteText()">📋 Paste Text Instead</button>
+          </div>
+
+          <label>Project</label>
+          <input id="mProject" placeholder="Auto-filled from OCR or type manually"/>
+
+          <label>Job / Item</label>
+          <input id="mJob" placeholder="Auto-filled from OCR or type manually"/>
+
+          <div class="row2">
+            <div>
+              <label>Carrier</label>
+              <select id="mCarrier">
+                <option>Box Truck</option>
+                <option>Pickup</option>
+                <option>Courier</option>
+                <option>CIS</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div>
+              <label>Loader (shop)</label>
+              <input id="mLoader" placeholder="Defaults to logged in user"/>
+            </div>
+          </div>
+
+          <div class="row2">
+            <div>
+              <label>Pickup Company</label>
+              <input id="mPickupCompany" placeholder="e.g. CIS"/>
+            </div>
+            <div>
+              <label>Signer Name (pickup)</label>
+              <input id="mSignerName" placeholder="Person signing at pickup"/>
+            </div>
+          </div>
+
+          <label>Notes</label>
+          <textarea id="mNotes" rows="2" placeholder="Optional..."></textarea>
+
+          <div class="card" style="margin-top:12px; box-shadow:none;">
+            <div class="cardHead">
+              <div>
+                <div class="cardTitle">Inventory Breakdown</div>
+                <div class="mini">Each line can be adjusted. Any manual adjustment requires a note.</div>
+              </div>
+              <button class="pill" onclick="EB.man.addLine()">➕ Add Line</button>
+            </div>
+
+            <div class="mini">Tip: Link an item by SKU (best) or by Name (fallback).</div>
+            <div class="mItems" id="mItems"></div>
+          </div>
+
+          <div class="row2" style="margin-top:12px;">
+            <button class="btn btnG" onclick="EB.man.saveDraft()">💾 Save Draft</button>
+            <button class="btn btnA" onclick="EB.man.finalize()">🔒 Finalize (Deduct Inventory)</button>
+          </div>
+
+          <div class="row2" style="margin-top:10px;">
+            <button class="btn btnG" onclick="EB.man.print()">🖨️ Print</button>
+            <button class="btn btnG" onclick="EB.man.downloadPackage()">⬇️ Download Package</button>
+          </div>
+
+          <button class="btn btnB" style="margin-top:10px;" onclick="EB.man.emailSummary()">✉️ Email Summary (attach package)</button>
+        </div>
+
+        <div class="card">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Signature + Paper Photo Proof</div>
+              <div class="mini">Capture signature on device or take photo of signed paper manifest.</div>
+            </div>
+            <div class="bar">
+              <button class="pill bad" onclick="EB.man.clearSig()">Clear Sig</button>
+              <button class="pill" onclick="EB.man.paperPhoto()">📸 Photo Paper Copy</button>
+            </div>
+          </div>
+
+          <label>Signature</label>
+          <div class="sigWrap"><canvas id="sig" style="width:100%;height:100%"></canvas></div>
+
+          <div class="thumbRow" id="paperThumbs"></div>
+        </div>
+
+        <div class="card">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Manifest List</div>
+              <div class="mini">Draft vs Finalized. Tap to load. Finalized is read-only.</div>
+            </div>
+          </div>
+          <div id="manList"></div>
+        </div>
+      </div>
+
+      <!-- SETTINGS VIEW -->
+      <div id="view-settings" class="grid" style="display:none;">
+        <div class="card">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Users (Simple Passwords)</div>
+              <div class="mini">This is accountability, not enterprise security. Admin password edits this list.</div>
+            </div>
+            <button class="pill bad" onclick="EB.logout()">Log Out</button>
+          </div>
+
+          <label>Admin Password (to edit users)</label>
+          <input id="sAdminPw" type="password" placeholder="Default 1344"/>
+
+          <label>Users List (one per line: Name|Password)</label>
+          <textarea id="sUsers" rows="6" placeholder="Howard|1234&#10;Mike|2222&#10;Steve|3333"></textarea>
+
+          <div class="row2">
+            <button class="btn btnA" onclick="EB.saveUsers()">✅ Save Users</button>
+            <button class="btn btnG" onclick="EB.resetToDefaults()">↩️ Reset Defaults</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Theme / Visuals</div>
+              <div class="mini">Change accents + background tint. This keeps the premium look consistent.</div>
+            </div>
+            <button class="pill" onclick="EB.applyTheme()">🎨 Apply</button>
+          </div>
+
+          <div class="row2">
+            <div>
+              <label>Accent A (Primary)</label>
+              <input id="tA" type="color" value="#22c55e"/>
+            </div>
+            <div>
+              <label>Accent B (Secondary)</label>
+              <input id="tB" type="color" value="#38bdf8"/>
+            </div>
+          </div>
+
+          <div class="row2">
+            <div>
+              <label>Background Top</label>
+              <input id="tBg0" type="color" value="#05070f"/>
+            </div>
+            <div>
+              <label>Background Bottom</label>
+              <input id="tBg1" type="color" value="#0b1224"/>
+            </div>
+          </div>
+
+          <div class="row2">
+            <div>
+              <label>Default Email Recipient</label>
+              <input id="sEmail" placeholder="e.g. howard@company.com"/>
+            </div>
+            <div>
+              <label>Near-Min Warning %</label>
+              <input id="sWarnPct" type="number" min="0" max="100" step="1" placeholder="e.g. 25"/>
+            </div>
+          </div>
+
+          <div class="row2">
+            <button class="btn btnB" onclick="EB.saveSettings()">💾 Save Settings</button>
+            <button class="btn btnG" onclick="EB.nav('inv')">⬅️ Back</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Data</div>
+              <div class="mini">Local-only storage (this device). When you want cloud sync, we wire Firebase later.</div>
+            </div>
+          </div>
+
+          <div class="row2">
+            <button class="btn btnG" onclick="EB.exportBackup()">⬇️ Export Backup (JSON)</button>
+            <button class="btn btnG" onclick="EB.importBackup()">⬆️ Import Backup (JSON)</button>
+          </div>
+
+          <button class="btn btnR" style="margin-top:10px" onclick="EB.nukeAll()">🧨 Factory Reset (This Device)</button>
+        </div>
+      </div>
+    </main>
+
+    <div class="tabs">
+      <button class="tab active" id="tabInv" onclick="EB.nav('inv')"><div class="ico">📦</div>Inventory</button>
+      <button class="tab" id="tabMan" onclick="EB.nav('man')"><div class="ico">🧾</div>Manifest</button>
+      <button class="tab" id="tabSet" onclick="EB.nav('settings')"><div class="ico">⚙️</div>Settings</button>
+    </div>
+  </div>
+
+  <!-- SCANNER -->
+  <div id="scanOverlay">
+    <div class="scanTop">
+      <div class="mini" id="scanHint">Scan</div>
+      <button class="pill bad" onclick="EB.closeScan()">Close</button>
+    </div>
+    <div id="reader"></div>
+  </div>
+
+  <!-- File inputs -->
+  <input id="csvFile" type="file" accept=".csv,text/csv" style="display:none"/>
+  <input id="backupFile" type="file" accept="application/json" style="display:none"/>
+  <input id="manPhoto" type="file" accept="image/*" capture="environment" style="display:none"/>
+  <input id="paperPhoto" type="file" accept="image/*" capture="environment" style="display:none"/>
+
+<script>
+const EB = {
+  KEY: "EB_INV_TRACKER_PREMIUM_V1",
+  state: null,
+  scanner: null,
+  scanMode: "inv",
+  session: { userName: null },
+
+  // ---------- core ----------
+  now(){ return Date.now(); },
+  iso(t){ return new Date(t || Date.now()).toISOString(); },
+  fmt(t){ try{ return new Date(t).toLocaleString(); } catch(e){ return "—"; } },
+
+  toast(msg, sub=""){
+    const t = document.getElementById("toast");
+    document.getElementById("toastMsg").textContent = msg;
+    document.getElementById("toastSub").textContent = sub || "";
+    t.classList.add("show");
+    setTimeout(()=>t.classList.remove("show"), 2200);
+  },
+
+  genId(prefix){
+    const r = (crypto && crypto.randomUUID) ? crypto.randomUUID() : ("r"+Math.random().toString(16).slice(2)+Date.now());
+    return `${prefix}_${r}`;
+  },
+
+  safeStr(s){ return (s ?? "").toString().trim(); },
+
+  // ---------- storage ----------
+  load(){
+    const raw = localStorage.getItem(this.KEY);
+    if(raw){
+      try{ this.state = JSON.parse(raw); } catch(e){}
+    }
+    if(!this.state){
+      this.state = {
+        deviceId: this.genId("dev"),
+        settings: {
+          adminPw: "1344",
+          defaultEmail: "",
+          warnPct: 25,
+          theme: { a:"#22c55e", b:"#38bdf8", bg0:"#05070f", bg1:"#0b1224" }
+        },
+        users: [
+          {name:"Howard", pw:"1234"},
+          {name:"Chris", pw:"9999"}
+        ],
+        inv: { items:{} , lowOnly:false },
+        manifests: { byId:{} }
+      };
+      this.save();
+    }
+
+    // set UI basics
+    document.getElementById("devId").textContent = this.state.deviceId;
+    document.getElementById("adminPwHint").textContent = this.state.settings.adminPw || "1344";
+    document.getElementById("dot").classList.add("ok");
+
+    // apply theme
+    this.applyTheme(true);
+
+    // load settings view fields
+    document.getElementById("sEmail").value = this.state.settings.defaultEmail || "";
+    document.getElementById("sWarnPct").value = (this.state.settings.warnPct ?? 25);
+    document.getElementById("tA").value = this.state.settings.theme.a || "#22c55e";
+    document.getElementById("tB").value = this.state.settings.theme.b || "#38bdf8";
+    document.getElementById("tBg0").value = this.state.settings.theme.bg0 || "#05070f";
+    document.getElementById("tBg1").value = this.state.settings.theme.bg1 || "#0b1224";
+
+    // users textarea
+    this.renderUsersText();
+
+    // low-only toggle
+    document.getElementById("lowOnly").classList.toggle("on", !!this.state.inv.lowOnly);
+
+    // wire file inputs
+    document.getElementById("csvFile").addEventListener("change", (e)=>this.inv.handleImportCSV(e));
+    document.getElementById("backupFile").addEventListener("change", (e)=>this.handleImportBackup(e));
+    document.getElementById("manPhoto").addEventListener("change", (e)=>this.man.handlePhoto(e));
+    document.getElementById("paperPhoto").addEventListener("change", (e)=>this.man.handlePaperPhoto(e));
+
+    // init sig pad
+    setTimeout(()=>this.man.initSigPad(), 200);
+  },
+
+  save(){
+    localStorage.setItem(this.KEY, JSON.stringify(this.state));
+  },
+
+  // ---------- auth ----------
+  login(){
+    const msg = document.getElementById("authMsg");
+    msg.textContent = "";
+    const pw = this.safeStr(document.getElementById("pw").value);
+    if(!pw) { msg.textContent = "Enter password."; return; }
+
+    const u = (this.state.users || []).find(x => x.pw === pw);
+    if(!u){
+      // allow admin as login too
+      if(pw === (this.state.settings.adminPw || "1344")){
+        this.session.userName = "ADMIN";
+      } else {
+        msg.textContent = "Wrong password.";
+        return;
+      }
+    } else {
+      this.session.userName = u.name;
+    }
+
+    document.getElementById("who").textContent = this.session.userName;
+    document.getElementById("auth").style.display = "none";
+    document.getElementById("app").style.display = "flex";
+    this.nav("inv");
+    this.inv.render();
+    this.man.renderList();
+    this.toast("Logged in", this.session.userName);
+  },
+
+  logout(){
+    this.session.userName = null;
+    document.getElementById("pw").value = "";
+    document.getElementById("authMsg").textContent = "";
+    document.getElementById("app").style.display = "none";
+    document.getElementById("auth").style.display = "flex";
+  },
+
+  who(){
+    return this.session.userName || "Unknown";
+  },
+
+  // ---------- nav ----------
+  nav(view){
+    const show = (id, on)=>document.getElementById(id).style.display = on ? "block" : "none";
+    show("view-inv", view==="inv");
+    show("view-man", view==="man");
+    show("view-settings", view==="settings");
+
+    document.getElementById("tabInv").classList.toggle("active", view==="inv");
+    document.getElementById("tabMan").classList.toggle("active", view==="man");
+    document.getElementById("tabSet").classList.toggle("active", view==="settings");
+
+    if(view==="man"){
+      // ensure loader default
+      if(!document.getElementById("mLoader").value.trim()){
+        document.getElementById("mLoader").value = this.who();
+      }
+      setTimeout(()=>this.man.initSigPad(true), 150);
+      this.man.renderList();
+    }
+  },
+
+  // ---------- users/settings ----------
+  renderUsersText(){
+    const lines = (this.state.users || []).map(u => `${u.name}|${u.pw}`).join("\n");
+    document.getElementById("sUsers").value = lines;
+  },
+
+  saveUsers(){
+    const adminAttempt = this.safeStr(document.getElementById("sAdminPw").value);
+    if(adminAttempt !== (this.state.settings.adminPw || "1344")){
+      alert("Admin password required to edit users.");
+      return;
+    }
+    const raw = document.getElementById("sUsers").value || "";
+    const rows = raw.split("\n").map(r=>r.trim()).filter(Boolean);
+    const out = [];
+    for(const r of rows){
+      const parts = r.split("|").map(x=>x.trim());
+      if(parts.length < 2) continue;
+      const name = parts[0];
+      const pw = parts[1];
+      if(!name || !pw) continue;
+      out.push({name, pw});
+    }
+    if(out.length === 0){
+      alert("Users list is empty/invalid.");
+      return;
+    }
+    this.state.users = out;
+    this.save();
+    document.getElementById("sAdminPw").value = "";
+    this.toast("Users saved ✅", `${out.length} users`);
+  },
+
+  resetToDefaults(){
+    const ok = prompt('Type RESET to restore default users & admin password (1344).');
+    if(ok !== "RESET") return;
+    this.state.settings.adminPw = "1344";
+    this.state.users = [
+      {name:"Howard", pw:"1234"},
+      {name:"Chris", pw:"9999"}
+    ];
+    this.save();
+    this.renderUsersText();
+    document.getElementById("adminPwHint").textContent = "1344";
+    this.toast("Defaults restored");
+  },
+
+  saveSettings(){
+    this.state.settings.defaultEmail = this.safeStr(document.getElementById("sEmail").value);
+    const warnPct = parseInt(document.getElementById("sWarnPct").value || "25", 10);
+    this.state.settings.warnPct = isFinite(warnPct) ? Math.max(0, Math.min(100, warnPct)) : 25;
+
+    this.state.settings.theme = {
+      a: document.getElementById("tA").value,
+      b: document.getElementById("tB").value,
+      bg0: document.getElementById("tBg0").value,
+      bg1: document.getElementById("tBg1").value
+    };
+    this.save();
+    this.applyTheme(true);
+    this.toast("Settings saved ✅");
+  },
+
+  applyTheme(fromState=false){
+    const theme = fromState ? (this.state.settings.theme || {}) : {
+      a: document.getElementById("tA").value,
+      b: document.getElementById("tB").value,
+      bg0: document.getElementById("tBg0").value,
+      bg1: document.getElementById("tBg1").value
+    };
+    const r = document.documentElement.style;
+    if(theme.bg0) r.setProperty("--bg0", theme.bg0);
+    if(theme.bg1) r.setProperty("--bg1", theme.bg1);
+    if(theme.a) r.setProperty("--accentA", theme.a);
+    if(theme.b) r.setProperty("--accentB", theme.b);
+
+    // update hint
+    document.getElementById("adminPwHint").textContent = this.state.settings.adminPw || "1344";
+  },
+
+  // ---------- backup ----------
+  exportBackup(){
+    const blob = new Blob([JSON.stringify(this.state, null, 2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `eastbay_inventory_tracker_backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    this.toast("Backup exported ✅");
+  },
+
+  importBackup(){
+    document.getElementById("backupFile").click();
+  },
+
+  handleImportBackup(e){
+    const f = e.target.files[0];
+    e.target.value = "";
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const obj = JSON.parse(reader.result.toString());
+        if(!obj || typeof obj !== "object") throw new Error("Invalid JSON");
+        if(!obj.inv || !obj.manifests || !obj.settings) throw new Error("Not a valid tracker backup");
+        this.state = obj;
+        this.save();
+        location.reload();
+      }catch(err){
+        alert("Import failed: " + err.message);
+      }
+    };
+    reader.readAsText(f);
+  },
+
+  nukeAll(){
+    const ok = prompt("Type NUKE to factory reset this device data.");
+    if(ok !== "NUKE") return;
+    localStorage.removeItem(this.KEY);
+    location.reload();
+  },
+
+  // ---------- QR scan ----------
+  async openScan(mode){
+    this.scanMode = mode; // inv = SKU, job = job id
+    document.getElementById("scanHint").textContent = mode==="inv"
+      ? "Scan Inventory SKU QR (value becomes SKU)"
+      : "Scan Job QR (value becomes Job ID in Manifest)";
+
+    document.getElementById("scanOverlay").style.display = "flex";
+
+    if(!this.scanner) this.scanner = new Html5Qrcode("reader");
+
+    try{
+      // stop any previous session
+      const st = this.scanner.getState ? this.scanner.getState() : null;
+      if(st === 2) await this.scanner.stop();
+
+      await this.scanner.start(
+        { facingMode:"environment" },
+        { fps: 12, qrbox: { width: 260, height: 260 } },
+        (txt)=>{
+          const val = this.safeStr(txt);
+          if(!val) return;
+
+          if(this.scanMode === "inv"){
+            document.getElementById("iSku").value = val;
+            if(this.state.inv.items[val]){
+              this.inv.loadToForm(val);
+              this.toast("SKU found ✅", "Loaded item");
+            }else{
+              this.toast("New SKU scanned ✅");
+            }
+            this.nav("inv");
+          } else {
+            this.nav("man");
+            // Put value into job field and create new manifest (or load if exists)
+            // We store manifest by id, but job QR can become the manifest id for simplicity
+            this.man.new(val);
+            document.getElementById("mJob").value = val; // job name prefill with QR
+            this.toast("Job scanned ✅", val);
+          }
+          this.closeScan();
+        }
+      );
+    }catch(err){
+      console.log(err);
+      alert("Camera/QR error: QR scanning requires HTTPS + camera permission. VPN does not matter, but permissions do.");
+      this.closeScan();
+    }
+  },
+
+  async closeScan(){
+    try{
+      if(this.scanner){
+        const st = this.scanner.getState ? this.scanner.getState() : null;
+        if(st === 2) await this.scanner.stop();
+        await this.scanner.clear();
+      }
+    }catch(e){}
+    document.getElementById("scanOverlay").style.display = "none";
+  },
+
+  // ---------- EOD email ----------
+  eodEmail(){
+    const to = encodeURIComponent(this.state.settings.defaultEmail || "");
+    const dateStr = new Date().toLocaleDateString();
+
+    // manifests stats
+    const mans = Object.values(this.state.manifests.byId || {});
+    const finalized = mans.filter(m=>m.status==="Final");
+    const draft = mans.filter(m=>m.status!=="Final");
+
+    // loaded: carrier grouping
+    const byCarrier = {};
+    for(const m of finalized){
+      const c = m.carrier || "Unknown";
+      byCarrier[c] = byCarrier[c] || [];
+      byCarrier[c].push(m);
+    }
+
+    // inventory low
+    const lows = [];
+    const warns = [];
+    const items = Object.values(this.state.inv.items || {});
+    for(const it of items){
+      const st = this.inv.status(it);
+      if(st==="low") lows.push(it);
+      if(st==="warn") warns.push(it);
+    }
+
+    const lines = [];
+    lines.push(`EOD Shop Report — ${dateStr}`);
+    lines.push(`--------------------------------`);
+    lines.push(`Generated by: ${this.who()} • Device: ${this.state.deviceId}`);
+    lines.push(``);
+
+    lines.push(`LOADED / FINALIZED MANIFESTS: ${finalized.length}`);
+    Object.keys(byCarrier).forEach(c=>{
+      lines.push(`- ${c}: ${byCarrier[c].length}`);
+      byCarrier[c].slice(0,12).forEach(m=>{
+        const signed = m.signerName ? ` • Signed: ${m.signerName}` : "";
+        lines.push(`  • ${m.project || "—"} | ${m.job || m.jobId || "—"}${signed}`);
+      });
+    });
+    lines.push(``);
+
+    lines.push(`IN SHOP (DRAFTS): ${draft.length}`);
+    draft.slice(0,12).forEach(m=>{
+      lines.push(`- ${m.project || "—"} | ${m.job || m.jobId || "—"} • Status: ${m.status || "Draft"}`);
+    });
+    lines.push(``);
+
+    lines.push(`INVENTORY ALERTS`);
+    lines.push(`LOW (${lows.length})`);
+    lows.slice(0,20).forEach(it=>{
+      lines.push(`- ${it.name} (SKU ${it.sku}) On:${it.on||0} Min:${it.min||0}`);
+    });
+    lines.push(``);
+    lines.push(`NEAR MIN (${warns.length})`);
+    warns.slice(0,20).forEach(it=>{
+      lines.push(`- ${it.name} (SKU ${it.sku}) On:${it.on||0} Min:${it.min||0}`);
+    });
+
+    const subject = encodeURIComponent(`EOD Report — ${dateStr}`);
+    const body = encodeURIComponent(lines.join("\n"));
+
+    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
+  }
+};
+
+// ================= INVENTORY =================
+EB.inv = {
+  getForm(){
+    const g = (id)=>document.getElementById(id).value;
+    return {
+      sku: EB.safeStr(g("iSku")),
+      name: EB.safeStr(g("iName")),
+      on: parseInt(g("iOn") || "0", 10) || 0,
+      unit: EB.safeStr(g("iUnit")) || "ea",
+      min: parseInt(g("iMin") || "0", 10) || 0,
+      max: parseInt(g("iMax") || "0", 10) || 0,
+      loc: EB.safeStr(g("iLoc")),
+      cat: EB.safeStr(g("iCat")),
+      notes: EB.safeStr(g("iNotes")),
+    };
+  },
+
+  clearForm(){
+    ["iSku","iName","iOn","iUnit","iMin","iMax","iLoc","iCat","iNotes"].forEach(id=>document.getElementById(id).value="");
+  },
+
+  loadToForm(sku){
+    const it = EB.state.inv.items[sku];
+    if(!it) return;
+    document.getElementById("iSku").value = it.sku || sku;
+    document.getElementById("iName").value = it.name || "";
+    document.getElementById("iOn").value = it.on ?? 0;
+    document.getElementById("iUnit").value = it.unit || "ea";
+    document.getElementById("iMin").value = it.min ?? 0;
+    document.getElementById("iMax").value = it.max ?? 0;
+    document.getElementById("iLoc").value = it.loc || "";
+    document.getElementById("iCat").value = it.cat || "";
+    document.getElementById("iNotes").value = it.notes || "";
+    window.scrollTo({top:0, behavior:"smooth"});
+  },
+
+  status(it){
+    const on = Number(it.on||0);
+    const min = Number(it.min||0);
+    const warnPct = Number(EB.state.settings.warnPct ?? 25);
+    if(min > 0 && on < min) return "low";
+    if(min > 0 && warnPct > 0){
+      const warnLine = Math.ceil(min + (min * (warnPct/100)));
+      // "near min": on between min and warnLine
+      if(on >= min && on <= warnLine) return "warn";
+    }
+    return "ok";
+  },
+
+  save(){
+    const f = this.getForm();
+    if(!f.sku) return alert("SKU required (scan QR or type).");
+    if(!f.name) return alert("Item name required.");
+
+    const prev = EB.state.inv.items[f.sku] || null;
+    const it = {
+      ...f,
+      createdAt: prev ? prev.createdAt : EB.now(),
+      updatedAt: EB.now(),
+      tx: prev && Array.isArray(prev.tx) ? prev.tx : []
+    };
+
+    EB.state.inv.items[f.sku] = it;
+    EB.save();
+    EB.toast("Item saved ✅", `${f.sku}`);
+    this.render();
+  },
+
+  quickAdjustFromForm(){
+    const sku = EB.safeStr(document.getElementById("iSku").value);
+    if(!sku) return alert("SKU required.");
+    const it = EB.state.inv.items[sku];
+    if(!it) return alert("Save the item first, then adjust.");
+    const deltaStr = prompt("Adjust quantity by (example: -5 or 12):", "");
+    if(deltaStr === null) return;
+    const delta = parseInt(deltaStr, 10);
+    if(!isFinite(delta) || delta === 0) return alert("Enter a valid non-zero number.");
+    const reason = prompt("Reason / Note (required):", "");
+    if(!reason || !reason.trim()) return alert("Note required for adjustments.");
+
+    this.adjust(sku, delta, reason.trim(), {source:"ManualAdjust"});
+  },
+
+  adjust(sku, delta, reason, meta={}){
+    const it = EB.state.inv.items[sku];
+    if(!it) return;
+
+    it.on = Number(it.on||0) + Number(delta||0);
+    it.updatedAt = EB.now();
+    if(!Array.isArray(it.tx)) it.tx = [];
+    it.tx.unshift({
+      at: EB.now(),
+      by: EB.who(),
+      deviceId: EB.state.deviceId,
+      delta: Number(delta),
+      on: it.on,
+      reason: reason || "",
+      meta
+    });
+    if(it.tx.length > 250) it.tx = it.tx.slice(0,250);
+
+    EB.state.inv.items[sku] = it;
+    EB.save();
+    EB.toast("Inventory updated ✅", `${sku} ${delta>0?"+":""}${delta}`);
+    this.render();
+  },
+
+  delete(sku){
+    if(!confirm("Delete this item permanently?")) return;
+    delete EB.state.inv.items[sku];
+    EB.save();
+    EB.toast("Deleted ✅", sku);
+    this.render();
+  },
+
+  toggleLowOnly(){
+    EB.state.inv.lowOnly = !EB.state.inv.lowOnly;
+    document.getElementById("lowOnly").classList.toggle("on", !!EB.state.inv.lowOnly);
+    EB.save();
+    this.render();
+  },
+
+  render(){
+    const list = document.getElementById("invList");
+    const term = EB.safeStr(document.getElementById("invSearch").value).toLowerCase();
+    const items = Object.values(EB.state.inv.items || {});
+
+    // sort by status then name
+    const pri = (s)=> s==="low" ? 0 : s==="warn" ? 1 : 2;
+    items.sort((a,b)=>{
+      const da = pri(this.status(a));
+      const db = pri(this.status(b));
+      if(da !== db) return da - db;
+      return (a.name||"").localeCompare(b.name||"");
+    });
+
+    const filtered = items.filter(it=>{
+      const st = this.status(it);
+      if(EB.state.inv.lowOnly && st !== "low") return false;
+      const hay = `${it.sku||""} ${it.name||""} ${it.loc||""} ${it.cat||""}`.toLowerCase();
+      if(term && !hay.includes(term)) return false;
+      return true;
+    });
+
+    document.getElementById("invCounts").textContent = `Showing ${filtered.length} of ${items.length} items`;
+
+    list.innerHTML = "";
+    if(filtered.length === 0){
+      list.innerHTML = `<div class="mini">No inventory items match your filter.</div>`;
+      return;
+    }
+
+    for(const it of filtered){
+      const st = this.status(it);
+      const cls = st==="low" ? "low" : st==="warn" ? "warn" : "ok";
+      const chipTxt = st==="low" ? "LOW" : st==="warn" ? "NEAR MIN" : "OK";
+
+      const div = document.createElement("div");
+      div.className = `item ${cls}`;
+      div.innerHTML = `
+        <div class="itemTop" onclick="this.parentElement.classList.toggle('open')">
+          <div>
+            <div class="name">${EB.escape(it.name||"—")}</div>
+            <div class="sku">SKU: <span class="kbd">${EB.escape(it.sku||"")}</span></div>
+          </div>
+          <div class="chip ${cls}">${chipTxt}</div>
+        </div>
+
+        <div class="meta">
+          <span><b>On:</b> ${Number(it.on||0)} ${EB.escape(it.unit||"")}</span>
+          <span><b>Min:</b> ${Number(it.min||0)}</span>
+          <span><b>Max:</b> ${Number(it.max||0)}</span>
+          ${it.loc ? `<span><b>Loc:</b> ${EB.escape(it.loc)}</span>` : ""}
+          ${it.cat ? `<span><b>Cat:</b> ${EB.escape(it.cat)}</span>` : ""}
+        </div>
+
+        <div class="actions">
+          <button class="aBtn blue" onclick="event.stopPropagation(); EB.inv.loadToForm('${EB.js(it.sku)}')">Edit</button>
+          <button class="aBtn green" onclick="event.stopPropagation(); EB.inv.adjust('${EB.js(it.sku)}', 1, 'Quick +1', {source:'Quick'})">+1</button>
+          <button class="aBtn green" onclick="event.stopPropagation(); EB.inv.adjust('${EB.js(it.sku)}', 5, 'Quick +5', {source:'Quick'})">+5</button>
+          <button class="aBtn red" onclick="event.stopPropagation(); EB.inv.adjust('${EB.js(it.sku)}', -1, 'Quick -1', {source:'Quick'})">-1</button>
+          <button class="aBtn red" onclick="event.stopPropagation(); EB.inv.adjust('${EB.js(it.sku)}', -5, 'Quick -5', {source:'Quick'})">-5</button>
+          <button class="aBtn red" onclick="event.stopPropagation(); EB.inv.delete('${EB.js(it.sku)}')">Delete</button>
+        </div>
+
+        <div class="details">
+          ${it.notes ? `<div class="mini" style="margin-bottom:10px"><b>Notes:</b> ${EB.escape(it.notes)}</div>` : ""}
+          <div class="cardTitle" style="margin-bottom:8px">Recent Transactions</div>
+          ${this.txHtml(it)}
+          <div class="mini" style="margin-top:10px">Updated: ${EB.fmt(it.updatedAt)}</div>
+        </div>
+      `;
+      list.appendChild(div);
+    }
+  },
+
+  txHtml(it){
+    const tx = Array.isArray(it.tx) ? it.tx : [];
+    if(tx.length === 0) return `<div class="mini">No transactions yet.</div>`;
+    return tx.slice(0,8).map(t=>{
+      const delta = Number(t.delta||0);
+      const dStr = `${delta>0?"+":""}${delta}`;
+      const reason = t.reason ? `<div class="noteLine">Note: ${EB.escape(t.reason)}</div>` : "";
+      return `
+        <div class="txRow">
+          <span>${EB.fmt(t.at)} • ${EB.escape(t.by||"Unknown")}</span>
+          <span><b>${dStr}</b> → ${Number(t.on||0)}</span>
+        </div>
+        ${reason}
+      `;
+    }).join("");
+  },
+
+  // CSV
+  triggerImport(){
+    document.getElementById("csvFile").click();
+  },
+
+  exportCSV(){
+    const cols = ["sku","name","on","unit","min","max","loc","cat","notes"];
+    const esc = (v)=>{
+      const s = (v ?? "").toString();
+      if(/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
+      return s;
+    };
+    const rows = [cols.join(",")];
+    for(const it of Object.values(EB.state.inv.items || {})){
+      rows.push(cols.map(c=>esc(it[c])).join(","));
+    }
+    const csv = rows.join("\n");
+    const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `eastbay_inventory_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    EB.toast("CSV exported ✅");
+  },
+
+  parseCSV(text){
+    const rows = [];
+    let cur=[], field="", inQ=false;
+    for(let i=0;i<text.length;i++){
+      const ch=text[i], nx=text[i+1];
+      if(inQ){
+        if(ch === '"' && nx === '"'){ field+='"'; i++; continue; }
+        if(ch === '"'){ inQ=false; continue; }
+        field += ch;
+      } else {
+        if(ch === '"'){ inQ=true; continue; }
+        if(ch === ','){ cur.push(field); field=""; continue; }
+        if(ch === '\n' || ch === '\r'){
+          if(ch === '\r' && nx === '\n') i++;
+          cur.push(field); field="";
+          if(cur.some(x=>x!=="")) rows.push(cur);
+          cur=[];
+          continue;
+        }
+        field += ch;
+      }
+    }
+    cur.push(field);
+    if(cur.some(x=>x!=="")) rows.push(cur);
+    return rows;
+  },
+
+  handleImportCSV(e){
+    const f = e.target.files[0];
+    e.target.value = "";
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const rows = this.parseCSV(reader.result.toString());
+        if(rows.length < 2) return alert("CSV is empty.");
+        const header = rows[0].map(h=>EB.safeStr(h).toLowerCase());
+        const idx = (c)=>header.indexOf(c);
+        if(idx("sku")<0 || idx("name")<0) return alert("CSV must have sku,name columns.");
+
+        let added=0;
+        for(let i=1;i<rows.length;i++){
+          const r=rows[i];
+          const sku=EB.safeStr(r[idx("sku")]);
+          const name=EB.safeStr(r[idx("name")]);
+          if(!sku || !name) continue;
+          const prev = EB.state.inv.items[sku] || {};
+          EB.state.inv.items[sku] = {
+            sku, name,
+            on: parseInt(r[idx("on")] || prev.on || "0",10) || 0,
+            unit: EB.safeStr(r[idx("unit")] || prev.unit || "ea") || "ea",
+            min: parseInt(r[idx("min")] || prev.min || "0",10) || 0,
+            max: parseInt(r[idx("max")] || prev.max || "0",10) || 0,
+            loc: EB.safeStr(r[idx("loc")] || prev.loc || ""),
+            cat: EB.safeStr(r[idx("cat")] || prev.cat || ""),
+            notes: EB.safeStr(r[idx("notes")] || prev.notes || ""),
+            createdAt: prev.createdAt || EB.now(),
+            updatedAt: EB.now(),
+            tx: Array.isArray(prev.tx) ? prev.tx : []
+          };
+          added++;
+        }
+        EB.save();
+        EB.toast("CSV imported ✅", `${added} items`);
+        this.render();
+      }catch(err){
+        alert("Import failed: " + err.message);
+      }
+    };
+    reader.readAsText(f);
+  }
+};
+
+// Helpers used in templates
+EB.escape = function(s){
+  return (s??"").toString()
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+};
+EB.js = function(s){
+  return (s??"").toString().replaceAll("\\","\\\\").replaceAll("'","\\'");
+};
+
+// ================= MANIFEST =================
+EB.man = {
+  currentId: null,
+  currentPaperPhoto: null,
+  sig: {ctx:null, ready:false},
+
+  new(forceId=null){
+    const id = forceId ? `MAN_${forceId}` : EB.genId("MAN");
+    const m = {
+      id,
+      status:"Draft",
+      createdAt: EB.now(),
+      updatedAt: EB.now(),
+      by: EB.who(),
+      deviceId: EB.state.deviceId,
+
+      project:"",
+      job:"",
+      carrier:"Box Truck",
+      loader: EB.who(),
+      pickupCompany:"",
+      signerName:"",
+      notes:"",
+
+      ocrText:"",
+      lines: [], // {sku,name,qtyOrig,qtyAdj,adjNote}
+      sigDataUrl:"",
+      paperPhotoDataUrl:""
+    };
+    EB.state.manifests.byId[id] = m;
+    EB.save();
+
+    this.load(id);
+    EB.toast("New manifest ✅", id);
+  },
+
+  clear(){
+    if(!confirm("Clear the current manifest form (does not delete saved manifests)?")) return;
+    this.currentId = null;
+    this.currentPaperPhoto = null;
+    document.getElementById("mId").textContent="—";
+    document.getElementById("mStatus").textContent="Draft";
+    document.getElementById("mBy").textContent="—";
+    document.getElementById("mProject").value="";
+    document.getElementById("mJob").value="";
+    document.getElementById("mCarrier").value="Box Truck";
+    document.getElementById("mLoader").value=EB.who();
+    document.getElementById("mPickupCompany").value="";
+    document.getElementById("mSignerName").value="";
+    document.getElementById("mNotes").value="";
+    document.getElementById("mItems").innerHTML="";
+    this.clearSig();
+    this.renderPaperThumbs();
+    this.renderList();
+  },
+
+  load(id){
+    const m = EB.state.manifests.byId[id];
+    if(!m) return;
+    this.currentId = id;
+
+    document.getElementById("mId").textContent = m.id;
+    document.getElementById("mStatus").textContent = m.status || "Draft";
+    document.getElementById("mBy").textContent = m.by || "—";
+
+    document.getElementById("mProject").value = m.project || "";
+    document.getElementById("mJob").value = m.job || "";
+    document.getElementById("mCarrier").value = m.carrier || "Box Truck";
+    document.getElementById("mLoader").value = m.loader || EB.who();
+    document.getElementById("mPickupCompany").value = m.pickupCompany || "";
+    document.getElementById("mSignerName").value = m.signerName || "";
+    document.getElementById("mNotes").value = m.notes || "";
+
+    // sig
+    if(m.sigDataUrl){
+      this.drawSig(m.sigDataUrl);
+    } else {
+      this.clearSig();
+    }
+
+    // paper
+    this.currentPaperPhoto = m.paperPhotoDataUrl || null;
+    this.renderPaperThumbs();
+
+    // render items
+    this.renderLines(m);
+
+    // lock UI if finalized
+    this.setLockState(m.status === "Final");
+    this.renderList();
+  },
+
+  setLockState(locked){
+    const lock = (id, v)=>{ const el=document.getElementById(id); if(el) el.disabled = v; };
+    ["mProject","mJob","mCarrier","mLoader","mPickupCompany","mSignerName","mNotes"].forEach(id=>lock(id, locked));
+
+    // buttons: finalize disabled if locked
+    // We'll enforce in code too.
+  },
+
+  saveDraft(){
+    if(!this.currentId){
+      this.new();
+      return;
+    }
+    const m = EB.state.manifests.byId[this.currentId];
+    if(!m) return;
+    if(m.status === "Final"){
+      alert("This manifest is finalized (read-only).");
+      return;
+    }
+
+    m.project = EB.safeStr(document.getElementById("mProject").value);
+    m.job = EB.safeStr(document.getElementById("mJob").value);
+    m.carrier = document.getElementById("mCarrier").value;
+    m.loader = EB.safeStr(document.getElementById("mLoader").value) || EB.who();
+    m.pickupCompany = EB.safeStr(document.getElementById("mPickupCompany").value);
+    m.signerName = EB.safeStr(document.getElementById("mSignerName").value);
+    m.notes = EB.safeStr(document.getElementById("mNotes").value);
+
+    // lines from DOM
+    m.lines = this.readLinesFromUI(m);
+
+    // signature data
+    m.sigDataUrl = document.getElementById("sig").toDataURL("image/jpeg", 0.75);
+    m.paperPhotoDataUrl = this.currentPaperPhoto || "";
+
+    m.updatedAt = EB.now();
+    m.by = m.by || EB.who();
+
+    EB.state.manifests.byId[m.id] = m;
+    EB.save();
+    EB.toast("Draft saved ✅", m.id);
+    this.renderList();
+  },
+
+  finalize(){
+    if(!this.currentId){
+      alert("Create/load a manifest first.");
+      return;
+    }
+    const m = EB.state.manifests.byId[this.currentId];
+    if(!m) return;
+    if(m.status === "Final"){
+      alert("Already finalized.");
+      return;
+    }
+
+    // Update fields and read lines
+    m.project = EB.safeStr(document.getElementById("mProject").value);
+    m.job = EB.safeStr(document.getElementById("mJob").value);
+    m.carrier = document.getElementById("mCarrier").value;
+    m.loader = EB.safeStr(document.getElementById("mLoader").value) || EB.who();
+    m.pickupCompany = EB.safeStr(document.getElementById("mPickupCompany").value);
+    m.signerName = EB.safeStr(document.getElementById("mSignerName").value);
+    m.notes = EB.safeStr(document.getElementById("mNotes").value);
+    m.lines = this.readLinesFromUI(m);
+
+    // validation: manual adjustment requires note if qtyAdj != qtyOrig
+    for(const ln of m.lines){
+      const o = Number(ln.qtyOrig||0);
+      const a = Number(ln.qtyAdj||0);
+      if(a !== o && !EB.safeStr(ln.adjNote)){
+        alert(`Manual adjustment note required for item: ${ln.name || ln.sku || "Unknown"}`);
+        return;
+      }
+    }
+
+    // deduct inventory
+    // For each line, deduct qtyAdj from linked SKU if exists.
+    const deductions = [];
+    for(const ln of m.lines){
+      const qty = Number(ln.qtyAdj||0);
+      if(!qty) continue;
+
+      // resolve SKU
+      let sku = EB.safeStr(ln.sku);
+      if(!sku && ln.name){
+        // try find by exact name (fallback)
+        const found = Object.values(EB.state.inv.items||{}).find(it => (it.name||"").toLowerCase() === (ln.name||"").toLowerCase());
+        if(found) sku = found.sku;
+      }
+      if(!sku) continue; // not linked, skip
+
+      if(EB.state.inv.items[sku]){
+        EB.inv.adjust(sku, -qty, `Manifest ${m.id} • ${m.project} | ${m.job} (deduct)`, {source:"Manifest", manifestId:m.id});
+        deductions.push({sku, qty});
+      }
+    }
+
+    // store proofs
+    m.sigDataUrl = document.getElementById("sig").toDataURL("image/jpeg", 0.75);
+    m.paperPhotoDataUrl = this.currentPaperPhoto || "";
+
+    m.status = "Final";
+    m.finalizedAt = EB.now();
+    m.finalizedBy = EB.who();
+    m.updatedAt = EB.now();
+
+    EB.state.manifests.byId[m.id] = m;
+    EB.save();
+
+    EB.toast("Finalized ✅", `Deducted ${deductions.length} linked items`);
+    this.setLockState(true);
+    this.renderList();
+    this.load(m.id);
+  },
+
+  addLine(pref={}){
+    if(!this.currentId){
+      this.new();
+    }
+    const m = EB.state.manifests.byId[this.currentId];
+    if(m.status === "Final"){
+      alert("Finalized manifest is read-only.");
+      return;
+    }
+    m.lines = m.lines || [];
+    m.lines.push({
+      sku: EB.safeStr(pref.sku),
+      name: EB.safeStr(pref.name),
+      qtyOrig: Number(pref.qtyOrig||0),
+      qtyAdj: Number(pref.qtyAdj||pref.qtyOrig||0),
+      adjNote: EB.safeStr(pref.adjNote)
+    });
+    EB.save();
+    this.renderLines(m);
+  },
+
+  removeLine(idx){
+    const m = EB.state.manifests.byId[this.currentId];
+    if(!m || m.status==="Final") return;
+    m.lines.splice(idx,1);
+    EB.save();
+    this.renderLines(m);
+  },
+
+  renderLines(m){
+    const wrap = document.getElementById("mItems");
+    wrap.innerHTML = "";
+
+    const locked = (m.status === "Final");
+    const lines = m.lines || [];
+
+    if(lines.length === 0){
+      wrap.innerHTML = `<div class="mini">No lines yet. Use OCR/Paste or Add Line.</div>`;
+      return;
+    }
+
+    lines.forEach((ln, idx)=>{
+      const div = document.createElement("div");
+      div.className = "mItem";
+      div.innerHTML = `
+        <div class="mItemTop">
+          <div>
+            <div class="mItemName">${EB.escape(ln.name || "Item")}</div>
+            <div class="mItemSku">SKU: <span class="kbd">${EB.escape(ln.sku || "— (link optional)")}</span></div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center">
+            <span class="tag">${locked ? "Final" : "Edit"}</span>
+            ${locked ? "" : `<button class="pill bad" style="padding:8px 10px;font-size:10px" onclick="EB.man.removeLine(${idx})">Remove</button>`}
+          </div>
+        </div>
+
+        <div class="mGrid3">
+          <div>
+            <div class="mini" style="margin-bottom:6px">Link by SKU (recommended)</div>
+            <input class="smallIn" ${locked?"disabled":""} value="${EB.escape(ln.sku||"")}" placeholder="SKU (optional)"
+              oninput="EB.man.updateLine(${idx}, 'sku', this.value)"/>
+          </div>
+          <div>
+            <div class="mini" style="margin-bottom:6px">Original Qty</div>
+            <input class="smallIn" ${locked?"disabled":""} type="number" step="1" value="${Number(ln.qtyOrig||0)}"
+              oninput="EB.man.updateLine(${idx}, 'qtyOrig', this.value)"/>
+          </div>
+          <div>
+            <div class="mini" style="margin-bottom:6px">Adjusted Qty (used)</div>
+            <input class="smallIn" ${locked?"disabled":""} type="number" step="1" value="${Number(ln.qtyAdj||0)}"
+              oninput="EB.man.updateLine(${idx}, 'qtyAdj', this.value)"/>
+          </div>
+        </div>
+
+        <div class="mGrid">
+          <div>
+            <div class="mini" style="margin-bottom:6px">Item Name</div>
+            <input class="smallIn" ${locked?"disabled":""} value="${EB.escape(ln.name||"")}" placeholder="Bolts / S-drive / etc"
+              oninput="EB.man.updateLine(${idx}, 'name', this.value)"/>
+          </div>
+          <div>
+            <div class="mini" style="margin-bottom:6px">Manual Adjustment Note (required if changed)</div>
+            <input class="smallIn" ${locked?"disabled":""} value="${EB.escape(ln.adjNote||"")}" placeholder="Why adjusted? Vicon mismatch..."
+              oninput="EB.man.updateLine(${idx}, 'adjNote', this.value)"/>
+          </div>
+        </div>
+
+        <div class="mini" style="margin-top:10px">
+          Inventory on-hand (linked SKU): <span class="kbd">${EB.escape(EB.man.peekOnHand(ln))}</span>
+        </div>
+      `;
+      wrap.appendChild(div);
+    });
+  },
+
+  updateLine(idx, key, val){
+    const m = EB.state.manifests.byId[this.currentId];
+    if(!m || m.status==="Final") return;
+    const ln = m.lines[idx];
+    if(!ln) return;
+    if(key === "qtyOrig" || key === "qtyAdj"){
+      ln[key] = parseInt(val || "0", 10) || 0;
+    } else {
+      ln[key] = EB.safeStr(val);
+    }
+    m.lines[idx] = ln;
+    EB.state.manifests.byId[m.id] = m;
+    EB.save();
+  },
+
+  readLinesFromUI(m){
+    // We already update lines live on input. Just return the stored lines.
+    return Array.isArray(m.lines) ? m.lines : [];
+  },
+
+  peekOnHand(ln){
+    const sku = EB.safeStr(ln.sku);
+    if(!sku) return "—";
+    const it = EB.state.inv.items[sku];
+    if(!it) return "SKU not found";
+    return `${Number(it.on||0)} ${it.unit||""}`.trim();
+  },
+
+  // -------- Photo OCR / Paste Text ----------
+  photoOCR(){
+    if(!this.currentId) this.new();
+    const m = EB.state.manifests.byId[this.currentId];
+    if(m.status==="Final") return alert("Finalized manifest is read-only.");
+    document.getElementById("manPhoto").click();
+  },
+
+  async handlePhoto(e){
+    const f = e.target.files[0];
+    e.target.value = "";
+    if(!f) return;
+
+    if(!this.currentId) this.new();
+    const m = EB.state.manifests.byId[this.currentId];
+
+    EB.toast("OCR running…", "This uses on-device OCR library");
+
+    // Create image url
+    const imgUrl = await new Promise((res, rej)=>{
+      const r = new FileReader();
+      r.onload = ()=>res(r.result);
+      r.onerror = rej;
+      r.readAsDataURL(f);
+    });
+
+    try{
+      const result = await Tesseract.recognize(imgUrl, "eng", {
+        logger: (info)=>{
+          if(info && info.status === "recognizing text"){
+            EB.toast("OCR…", `${Math.round((info.progress||0)*100)}%`);
+          }
+        }
+      });
+      const text = (result && result.data && result.data.text) ? result.data.text : "";
+      m.ocrText = text;
+      EB.save();
+
+      // Parse basic fields
+      const parsed = this.parseManifestText(text);
+      document.getElementById("mProject").value = parsed.project || document.getElementById("mProject").value;
+      document.getElementById("mJob").value = parsed.job || document.getElementById("mJob").value;
+      if(!document.getElementById("mLoader").value.trim()) document.getElementById("mLoader").value = EB.who();
+
+      // Merge lines
+      if(parsed.lines && parsed.lines.length){
+        // replace if empty, otherwise append
+        if(!Array.isArray(m.lines) || m.lines.length === 0){
+          m.lines = parsed.lines;
+        } else {
+          m.lines = m.lines.concat(parsed.lines);
+        }
+        EB.save();
+        this.renderLines(m);
+      }
+
+      EB.toast("OCR complete ✅", `Lines found: ${parsed.lines.length}`);
+    }catch(err){
+      console.log(err);
+      alert("OCR failed on this device/network. Use Paste Text or Manual entry.");
+    }
+  },
+
+  pasteText(){
+    if(!this.currentId) this.new();
+    const m = EB.state.manifests.byId[this.currentId];
+    if(m.status==="Final") return alert("Finalized manifest is read-only.");
+
+    const text = prompt("Paste manifest text here (from email/PDF copy):", "");
+    if(text === null) return;
+    if(!text.trim()) return;
+
+    m.ocrText = text;
+    const parsed = this.parseManifestText(text);
+
+    document.getElementById("mProject").value = parsed.project || document.getElementById("mProject").value;
+    document.getElementById("mJob").value = parsed.job || document.getElementById("mJob").value;
+
+    if(parsed.lines && parsed.lines.length){
+      if(!Array.isArray(m.lines) || m.lines.length === 0) m.lines = parsed.lines;
+      else m.lines = m.lines.concat(parsed.lines);
+      EB.save();
+      this.renderLines(m);
+    }
+    EB.toast("Parsed text ✅", `Lines: ${parsed.lines.length}`);
+  },
+
+  // Parsing approach:
+  // - Looks for "Project:" or "PROJECT" lines
+  // - Looks for "Job:" or "JOB" lines
+  // - Extracts item lines like "Bolts 24" or "BOLTS - 24"
+  parseManifestText(text){
+    const t = (text||"").replace(/\t/g," ").replace(/\r/g,"\n");
+    const lines = t.split("\n").map(x=>x.trim()).filter(Boolean);
+
+    let project = "";
+    let job = "";
+
+    // Try field-based
+    for(const ln of lines){
+      const up = ln.toUpperCase();
+      if(!project && (up.includes("PROJECT") || up.startsWith("PROJ"))){
+        // Project: XYZ
+        const m = ln.split(":");
+        if(m.length >= 2){
+          project = m.slice(1).join(":").trim();
+        } else {
+          // PROJECT XYZ
+          project = ln.replace(/project/i,"").trim().replace(/^[-:]/,"").trim();
+        }
+      }
+      if(!job && (up.includes("JOB") || up.includes("ITEM") || up.includes("RTU") || up.includes("TAG"))){
+        if(up.startsWith("JOB") || up.startsWith("ITEM")){
+          const m2 = ln.split(":");
+          if(m2.length >= 2) job = m2.slice(1).join(":").trim();
+        }
+      }
+      if(project && job) break;
+    }
+
+    // Item lines: heuristic for quantity at end
+    // e.g. "BOLTS 24" or "BOLTS - 24" or "BOLTS: 24"
+    const outLines = [];
+    const qtyRe = /(.+?)\s*[:\-]?\s*(\d+)\s*$/;
+
+    for(const ln of lines){
+      // skip obvious headers
+      const up = ln.toUpperCase();
+      if(up.includes("PROJECT") || up.startsWith("JOB") || up.includes("DATE") || up.includes("MANIFEST")) continue;
+      if(up.length < 3) continue;
+
+      const m = ln.match(qtyRe);
+      if(!m) continue;
+
+      const name = m[1].trim();
+      const qty = parseInt(m[2],10);
+
+      // Ignore if name seems like a date/time or pure numbers
+      if(!name || /^\d+$/.test(name)) continue;
+      if(name.length < 2) continue;
+
+      outLines.push({
+        sku: "",
+        name: name,
+        qtyOrig: isFinite(qty) ? qty : 0,
+        qtyAdj: isFinite(qty) ? qty : 0,
+        adjNote: ""
+      });
+    }
+
+    // De-dupe by name+qty
+    const seen = new Set();
+    const uniq = [];
+    for(const x of outLines){
+      const k = (x.name||"").toLowerCase()+"|"+(x.qtyOrig||0);
+      if(seen.has(k)) continue;
+      seen.add(k);
+      uniq.push(x);
+    }
+
+    return { project, job, lines: uniq };
+  },
+
+  // -------- Signature + paper photo ----------
+  initSigPad(resizeOnly=false){
+    const cvs = document.getElementById("sig");
+    if(!cvs) return;
+    const rect = cvs.getBoundingClientRect();
+    if(rect.width < 10 || rect.height < 10){
+      if(!resizeOnly) setTimeout(()=>this.initSigPad(true), 250);
+      return;
+    }
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    cvs.width = Math.round(rect.width * ratio);
+    cvs.height = Math.round(rect.height * ratio);
+
+    const ctx = cvs.getContext("2d");
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#111827";
+    this.sig.ctx = ctx;
+    this.sig.ready = true;
+
+    let drawing = false;
+    const pos = (e)=>{
+      const r = cvs.getBoundingClientRect();
+      const t = e.touches ? e.touches[0] : e;
+      return {x: t.clientX - r.left, y: t.clientY - r.top};
+    };
+
+    const start = (e)=>{
+      drawing = true;
+      const p = pos(e);
+      ctx.beginPath();
+      ctx.moveTo(p.x,p.y);
+      e.preventDefault();
+    };
+    const move = (e)=>{
+      if(!drawing) return;
+      const p = pos(e);
+      ctx.lineTo(p.x,p.y);
+      ctx.stroke();
+      e.preventDefault();
+    };
+    const end = (e)=>{ drawing=false; e && e.preventDefault && e.preventDefault(); };
+
+    if(!cvs.__bound){
+      cvs.addEventListener("mousedown", start);
+      cvs.addEventListener("mousemove", move);
+      window.addEventListener("mouseup", end);
+
+      cvs.addEventListener("touchstart", start, {passive:false});
+      cvs.addEventListener("touchmove", move, {passive:false});
+      window.addEventListener("touchend", end, {passive:false});
+      cvs.__bound = true;
+    }
+  },
+
+  clearSig(){
+    const cvs = document.getElementById("sig");
+    const rect = cvs.getBoundingClientRect();
+    if(this.sig.ready){
+      this.sig.ctx.clearRect(0,0,rect.width,rect.height);
+    }else{
+      const ctx = cvs.getContext("2d");
+      ctx.clearRect(0,0,cvs.width,cvs.height);
+    }
+    EB.toast("Signature cleared");
+  },
+
+  drawSig(dataUrl){
+    const cvs = document.getElementById("sig");
+    const rect = cvs.getBoundingClientRect();
+    const ctx = this.sig.ctx || cvs.getContext("2d");
+    const img = new Image();
+    img.onload = ()=>{
+      ctx.clearRect(0,0,rect.width,rect.height);
+      ctx.drawImage(img, 0, 0, rect.width, rect.height);
+    };
+    img.src = dataUrl;
+  },
+
+  paperPhoto(){
+    document.getElementById("paperPhoto").click();
+  },
+
+  async handlePaperPhoto(e){
+    const f = e.target.files[0];
+    e.target.value = "";
+    if(!f) return;
+    // compress to keep localStorage usable
+    const dataUrl = await new Promise((res, rej)=>{
+      const r = new FileReader();
+      r.onload = ()=>res(r.result);
+      r.onerror = rej;
+      r.readAsDataURL(f);
+    });
+
+    const img = new Image();
+    img.onload = ()=>{
+      const max = 1400;
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const cvs = document.createElement("canvas");
+      cvs.width = Math.round(img.width * scale);
+      cvs.height = Math.round(img.height * scale);
+      const ctx = cvs.getContext("2d");
+      ctx.drawImage(img, 0, 0, cvs.width, cvs.height);
+      this.currentPaperPhoto = cvs.toDataURL("image/jpeg", 0.78);
+      this.renderPaperThumbs();
+
+      // store into manifest if exists
+      if(this.currentId){
+        const m = EB.state.manifests.byId[this.currentId];
+        if(m && m.status!=="Final"){
+          m.paperPhotoDataUrl = this.currentPaperPhoto;
+          EB.save();
+        }
+      }
+      EB.toast("Paper photo added ✅");
+    };
+    img.src = dataUrl;
+  },
+
+  renderPaperThumbs(){
+    const wrap = document.getElementById("paperThumbs");
+    wrap.innerHTML = "";
+    if(this.currentPaperPhoto){
+      wrap.innerHTML = `
+        <div>
+          <div class="mini">Paper copy photo</div>
+          <img src="${this.currentPaperPhoto}" class="thumb" onclick="window.open('${this.currentPaperPhoto}')"/>
+          <div class="mini" style="margin-top:8px">
+            <button class="pill bad" style="padding:8px 10px;font-size:10px" onclick="EB.man.removePaper()">Remove</button>
+          </div>
+        </div>
+      `;
+    } else {
+      wrap.innerHTML = `<div class="mini">No paper photo captured.</div>`;
+    }
+  },
+
+  removePaper(){
+    this.currentPaperPhoto = null;
+    this.renderPaperThumbs();
+    if(this.currentId){
+      const m = EB.state.manifests.byId[this.currentId];
+      if(m && m.status!=="Final"){
+        m.paperPhotoDataUrl = "";
+        EB.save();
+      }
+    }
+  },
+
+  // -------- Manifest list ----------
+  renderList(){
+    const wrap = document.getElementById("manList");
+    const mans = Object.values(EB.state.manifests.byId || {});
+    mans.sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
+
+    if(mans.length === 0){
+      wrap.innerHTML = `<div class="mini">No manifests yet.</div>`;
+      return;
+    }
+
+    wrap.innerHTML = "";
+    for(const m of mans){
+      const st = m.status === "Final" ? "Final" : "Draft";
+      const tagCls = m.status==="Final" ? "green" : "warn";
+      const signed = m.signerName ? `• Signed: ${EB.escape(m.signerName)}` : "";
+      const div = document.createElement("div");
+      div.className = "item " + (m.status==="Final" ? "ok" : "warn");
+      div.innerHTML = `
+        <div class="itemTop" onclick="EB.man.load('${EB.js(m.id)}')">
+          <div>
+            <div class="name">${EB.escape(m.project||"—")} • ${EB.escape(m.job||m.id)}</div>
+            <div class="sku">
+              <span class="kbd">${EB.escape(m.id)}</span> • ${EB.escape(m.carrier||"—")} ${signed}
+            </div>
+          </div>
+          <div class="chip ${tagCls}">${st}</div>
+        </div>
+        <div class="meta">
+          <span><b>Updated:</b> ${EB.fmt(m.updatedAt)}</span>
+          <span><b>By:</b> ${EB.escape(m.by||"—")}</span>
+          <span><b>Lines:</b> ${(m.lines||[]).length}</span>
+        </div>
+      `;
+      wrap.appendChild(div);
+    }
+  },
+
+  // -------- Email / print / package ----------
+  emailSummary(){
+    if(!this.currentId) return alert("Load a manifest first.");
+    const m = EB.state.manifests.byId[this.currentId];
+    if(!m) return;
+
+    const to = encodeURIComponent(EB.state.settings.defaultEmail || "");
+    const subject = encodeURIComponent(`Manifest ${m.id} — ${m.project || ""} ${m.job || ""}`.trim());
+    const lines = [];
+    lines.push(`MANIFEST SUMMARY`);
+    lines.push(`----------------`);
+    lines.push(`Manifest: ${m.id}`);
+    lines.push(`Project: ${m.project || "—"}`);
+    lines.push(`Job: ${m.job || "—"}`);
+    lines.push(`Carrier: ${m.carrier || "—"}`);
+    lines.push(`Loader: ${m.loader || "—"}`);
+    lines.push(`Pickup Company: ${m.pickupCompany || "—"}`);
+    lines.push(`Signer: ${m.signerName || "—"}`);
+    lines.push(`Status: ${m.status || "Draft"}`);
+    lines.push(`Saved/Finalized by: ${m.finalizedBy || m.by || "—"}`);
+    lines.push(`Device: ${m.deviceId || "—"}`);
+    lines.push(`Time: ${EB.fmt(m.updatedAt)}`);
+    lines.push(``);
+    lines.push(`ITEMS:`);
+    for(const ln of (m.lines||[])){
+      const o = Number(ln.qtyOrig||0);
+      const a = Number(ln.qtyAdj||0);
+      const adj = (a!==o) ? ` (ADJ from ${o} → ${a}) Note: ${ln.adjNote||""}` : "";
+      lines.push(`- ${ln.name || ln.sku || "Item"}: ${a}${adj}`);
+    }
+    lines.push(``);
+    lines.push(`IMPORTANT:`);
+    lines.push(`Attach the downloaded package JSON from Downloads (includes signature + paper photo).`);
+
+    const body = encodeURIComponent(lines.join("\n"));
+    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
+  },
+
+  downloadPackage(){
+    if(!this.currentId) return alert("Load a manifest first.");
+    const m = EB.state.manifests.byId[this.currentId];
+    if(!m) return;
+
+    // make sure we save latest signature/paper into package
+    const pkg = {
+      type: "eastbay_manifest_package",
+      version: "1.0",
+      exportedAt: EB.iso(),
+      exportedBy: EB.who(),
+      deviceId: EB.state.deviceId,
+      manifest: {
+        ...m,
+        sigDataUrl: document.getElementById("sig").toDataURL("image/jpeg", 0.75),
+        paperPhotoDataUrl: this.currentPaperPhoto || m.paperPhotoDataUrl || ""
+      }
+    };
+
+    const blob = new Blob([JSON.stringify(pkg, null, 2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `manifest_${m.id}_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    EB.toast("Package downloaded ✅");
+  },
+
+  print(){
+    if(!this.currentId) return alert("Load a manifest first.");
+    const m = EB.state.manifests.byId[this.currentId];
+    if(!m) return;
+
+    const sigUrl = document.getElementById("sig").toDataURL("image/jpeg", 0.75);
+    const paper = this.currentPaperPhoto || m.paperPhotoDataUrl || "";
+
+    const itemLis = (m.lines||[]).map(ln=>{
+      const o = Number(ln.qtyOrig||0);
+      const a = Number(ln.qtyAdj||0);
+      const adj = (a!==o) ? ` <b>(ADJ ${o}→${a})</b> <i>${EB.escape(ln.adjNote||"")}</i>` : "";
+      return `<li>${EB.escape(ln.name || ln.sku || "Item")}: <b>${a}</b>${adj}</li>`;
+    }).join("") || "<li>—</li>";
+
+    document.getElementById("printArea").innerHTML = `
+      <h2>LOAD OUT MANIFEST</h2>
+      <div class="box">
+        <b>Manifest:</b> ${EB.escape(m.id)}<br/>
+        <b>Project:</b> ${EB.escape(m.project||"—")}<br/>
+        <b>Job:</b> ${EB.escape(m.job||"—")}<br/>
+      </div>
+      <div class="box">
+        <b>Carrier:</b> ${EB.escape(m.carrier||"—")}<br/>
+        <b>Loader:</b> ${EB.escape(m.loader||"—")}<br/>
+        <b>Pickup Company:</b> ${EB.escape(m.pickupCompany||"—")}<br/>
+        <b>Signer:</b> ${EB.escape(m.signerName||"—")}<br/>
+        <b>Status:</b> ${EB.escape(m.status||"Draft")}<br/>
+        <b>Saved By:</b> ${EB.escape(m.by||"—")}<br/>
+        <b>Device:</b> ${EB.escape(m.deviceId||"—")}<br/>
+        <b>Time:</b> ${EB.escape(EB.fmt(m.updatedAt))}<br/>
+      </div>
+
+      <div class="box">
+        <b>Items</b>
+        <ul>${itemLis}</ul>
+      </div>
+
+      ${m.notes ? `<div class="box"><b>Notes</b><br/><div style="white-space:pre-wrap">${EB.escape(m.notes)}</div></div>` : ""}
+
+      <div class="box">
+        <b>Signature (device)</b><br/>
+        <img src="${sigUrl}" />
+      </div>
+
+      ${paper ? `<div class="box"><b>Paper Copy Photo</b><br/><img src="${paper}" /></div>` : ""}
+    `;
+    window.print();
+  }
+};
+
+// boot
+EB.load();
+</script>
+</body>
+</html>

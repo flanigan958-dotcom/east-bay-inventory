@@ -1,0 +1,67 @@
+name: Build Jarvis One Mobile APK
+
+on:
+  push:
+    branches:
+      - jarvis-mobile-build-2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout build branch
+        uses: actions/checkout@v4
+
+      - name: Restore Android project
+        shell: bash
+        run: |
+          mkdir -p jarvis-app
+          cat jarvis-build/project.part00 jarvis-build/project.part01 jarvis-build/project.part02 > jarvis-project.tar.xz.b64
+          base64 --decode jarvis-project.tar.xz.b64 > jarvis-project.tar.xz
+          tar -xJf jarvis-project.tar.xz -C jarvis-app
+          test -f jarvis-app/settings.gradle
+          test -f jarvis-app/app/src/main/AndroidManifest.xml
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        shell: bash
+        run: yes | sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Compile installable APK
+        shell: bash
+        run: gradle -p jarvis-app :app:assembleDebug --stacktrace
+
+      - name: Verify and rename APK
+        shell: bash
+        run: |
+          test -s jarvis-app/app/build/outputs/apk/debug/app-debug.apk
+          cp jarvis-app/app/build/outputs/apk/debug/app-debug.apk Jarvis-One-Mobile.apk
+          sha256sum Jarvis-One-Mobile.apk > Jarvis-One-Mobile.apk.sha256
+
+      - name: Upload phone installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Jarvis-One-Mobile-Android
+          path: |
+            Jarvis-One-Mobile.apk
+            Jarvis-One-Mobile.apk.sha256
+          if-no-files-found: error
+          retention-days: 30

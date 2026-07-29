@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p jarvis-app
-          cp jarvis-build/project.part00 jarvis-project.tar.xz.b64
+          cat jarvis-build/native.part00 jarvis-build/native.part01 jarvis-build/native.part02 jarvis-build/native.part03 jarvis-build/native.part04 > jarvis-project.tar.xz.b64
           base64 --decode jarvis-project.tar.xz.b64 > jarvis-project.tar.xz
           tar -xJf jarvis-project.tar.xz -C jarvis-app
           test -f jarvis-app/settings.gradle

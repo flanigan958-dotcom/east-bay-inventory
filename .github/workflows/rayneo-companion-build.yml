@@ -49,8 +49,27 @@ jobs:
           test -f rayneo-build/src/RayNeoCompanion/settings.gradle
 
       - name: Unit tests
+        id: unit_tests
+        continue-on-error: true
         working-directory: rayneo-build/src/RayNeoCompanion
-        run: gradle --no-daemon testDebugUnitTest
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle --no-daemon testDebugUnitTest 2>&1 | tee /tmp/rayneo-unit-tests.log
+
+      - name: Upload compile diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: RayNeo-Companion-compile-diagnostics
+          path: /tmp/rayneo-unit-tests.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Stop on unit-test failure
+        if: steps.unit_tests.outcome == 'failure'
+        shell: bash
+        run: exit 1
 
       - name: Android lint
         working-directory: rayneo-build/src/RayNeoCompanion
